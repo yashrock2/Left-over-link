@@ -1,0 +1,111 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id                String    @id @default(cuid())
+  role              Role
+  name              String
+  email             String    @unique
+  passwordHash      String
+  phone             String    @unique
+  emailVerified     Boolean   @default(false)
+  phoneVerified     Boolean   @default(false)
+  registrationDocUrl String?   // For NGOs
+  reputation        Int       @default(0) // For NGOs
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  // Restaurant fields
+  donations         Donation[]
+  points            Point[]
+
+  // NGO fields
+  claims            Claim[]
+
+  // Admin fields
+  logs              AdminLog[]
+
+  // Tokens
+  emailVerifyToken  String?   @unique
+}
+
+model Donation {
+  id           String         @id @default(cuid())
+  restaurant   User           @relation(fields: [restaurantId], references: [id])
+  restaurantId String
+  items        Json           // e.g., [{"name": "Bread", "quantity": "10 loaves"}]
+  portions     Int
+  pickupStart  DateTime
+  pickupEnd    DateTime
+  location     Json           // e.g., {"lat": 12.34, "lng": 56.78, "address": "123 Main St"}
+  images       String[]       // Array of URLs
+  status       DonationStatus @default(AVAILABLE)
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+
+  claims       Claim[]
+}
+
+model Claim {
+  id          String      @id @default(cuid())
+  donation    Donation    @relation(fields: [donationId], references: [id])
+  donationId  String
+  ngo         User        @relation(fields: [ngoId], references: [id])
+  ngoId       String
+  requestTime DateTime    @default(now())
+  confirmTime DateTime?
+  pickupTime  DateTime?
+  status      ClaimStatus @default(REQUESTED)
+  proofUrl    String?     // URL to image/doc of completion
+  point       Point?
+  @@unique([donationId, ngoId]) // An NGO can only claim a donation once
+}
+
+model Point {
+  id           String   @id @default(cuid())
+  restaurant   User     @relation(fields: [restaurantId], references: [id])
+  restaurantId String
+  claim        Claim    @relation(fields: [claimId], references: [id])
+  claimId      String   @unique
+  points       Int
+  reason       String   // e.g., "Donation of 50 portions"
+  timestamp    DateTime @default(now())
+}
+
+model AdminLog {
+  id        String   @id @default(cuid())
+  actor     User     @relation(fields: [actorId], references: [id])
+  actorId   String
+  action    String   // e.g., "VERIFY_NGO", "DELETE_DONATION"
+  details   Json
+  timestamp DateTime @default(now())
+}
+
+enum Role {
+  RESTAURANT
+  NGO
+  ADMIN
+}
+
+enum DonationStatus {
+  AVAILABLE
+  CLAIMED
+  COMPLETED
+  CANCELLED
+}
+
+enum ClaimStatus {
+  REQUESTED
+  CONFIRMED
+  COMPLETED
+  REJECTED
+}
